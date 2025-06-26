@@ -1,164 +1,144 @@
 # crypto-trades-firefly-iii
 
-This service lets you import your movements on supported crypto trading platforms to your Firefly III account. Keep an overview of your traded crypto assets.
+**Import your crypto trading activity into Firefly III for unified personal finance tracking.**
 
-## Overview
+---
+
+## Project Summary
+
+`crypto-trades-firefly-iii` is a service that automatically imports your trades, deposits, withdrawals, and interest from supported crypto trading platforms into your [Firefly III](https://firefly-iii.org/) instance. It helps you keep a complete and up-to-date overview of your crypto assets alongside your other finances.
+
+**Who is this for?**
+
+- Crypto traders and investors who use Firefly III for personal finance.
+- Anyone who wants to automate the tracking of their crypto transactions and balances.
+
+---
+
+## Features ✨
+
+- 🔄 **Automated Trade Import:** Syncs executed trades as transactions in Firefly III, including asset and currency movements.
+- 💸 **Commission Tracking:** Imports paid fees as separate transactions, linked to the correct accounts.
+- 💰 **Interest Handling:** Automatically imports received interest from savings, lending, or staking.
+- 📥📤 **Deposits & Withdrawals:** Imports crypto deposits and withdrawals, with support for classifying transactions as transfers for supported blockchains.
+- 🏷️ **Tagging & Notes:** All transactions are tagged and annotated for easy filtering and reporting in Firefly III.
+- 🔗 **Multiple Exchange Support:** Can be run for multiple exchanges (recommended: one instance per exchange).
+- 🐳 **Docker & Standalone:** Easy to run as a Docker container or as a standalone Python script.
+
+---
+
+## Big Picture
 
 [Big Picture](plantuml/overview.svg)
 <img src="plantuml/overview.svg">
 
-## Imported Movements from Crypto Trading Platform to Firefly III
+---
 
-The following movements on your crypto trading platform account will be imported to your Firefly III instance:
+## Quick Start 🚀
 
-### Executed trades
-- Creates transactions for each trade happened automatically
-  - adds/lowers funds to/from your "security" account - the asset account of the coin you have bought or sold in that trade
-  - lowers/adds funds to/from your "currency" account - the asset account of the coin you have sold or bought in that trade
-  - transactions get a tag <crypto trading platform> assigned (e.g. "binance")
-  - transactions get a note "crypto-trades-firefly-iii:<crypto exchange>" (e.g. "crypto-trades-firefly-iii:binance")
-- Paid fees import as new transactions
-  - For each trade on your crypto trading platform there is a paid commission. For this paid commission an additional transaction is created, linking the asset account holding the commission currency, and the crypto trading platform expense account.
-  - transactions get a tag <crypto trading platform> assigned (e.g. "binance")
-  - transactions get a note "crypto-trades-firefly-iii:<crypto exchange>" (e.g. "crypto-trades-firefly-iii:binance")
+### Prerequisites
 
-### Received interest through savings (lending/staking)
+- Python 3.9 (if running standalone)
+- Docker (if running as a container)
+- A running Firefly III instance (tested with v5.4.6)
+- API keys for your crypto exchange(s)
+- Firefly III API access token
 
-- Received interest will be imported automatically
-  - transactions get a tag <crypto trading platform> assigned (e.g. "binance")
-  - transactions get a note "crypto-trades-firefly-iii:<crypto exchange>" (e.g. "crypto-trades-firefly-iii:binance")
+### Run with Docker (Recommended)
 
-### Withdrawals and deposits in crypto
-
-- Import withdrawals and deposits from/to the exchange automatically
-  - transactions get a tag <crypto trading platform> assigned (e.g. "binance")
-  - transactions get a note "crypto-trades-firefly-iii:unclassified-transaction:<crypto exchange>" (e.g. "crypto-trades-firefly-iii:binance")
-- For supported Blockchains you can make those unclassified transactions "regular" classified transactions (which means, deposits don't come in as revenue or withdrawals as withdrawals to expense accounts, instead they are created as "transfer" transactions accordingly to the relevant asset account). See here on [how to use supported blockchains](src/backends/public_ledgers) with this service.
-  - _**Known limitations for not supported Blockchains**_
-    - As of now these transactions are unclassified, as there is no logic of matching other asset accounts with public ledger transactions.
-
-### On-/Off-ramping from or to SEPA asset accounts
-
-- on the roadmap
-
-# How to Use
-
-This module runs stateless next to your Firefly III instance (as Docker container or standalone) and periodically processes new data from your configured crypto trading platform. Just spin it up and watch your trades being imported right away.
-
-## If you have used binance-firefly-iii before
-
-Just configure this service as you configured binance-firefly-iii and run it. All "notes identifier" will be migrated for using crypto-trades-firefly-iii.
-binance-firefly-iii will not find any accounts within Firefly-III afterwards.
-
-_"notes identifier" are used so that crypto-trades-firefly-iii services can find and match your correct exchange accounts._
-
-## Prepare your Firefly III instance for supported exchanges
-
-To import your movements from Binance your Firefly III installation has to be extended as follows:
-
-- Currencies for crypto coins/tokens
-  - Add custom currencies which you are trading on crypto exchanges (e.g. name "Bitcoin", symbol "₿", code "BTC", digits "8")
-- Create accounts for each of your exchange connections
-  - asset accounts
-    - add an asset account for each coin/token
-  - expense account
-    - add one account for all expenses on that exchange
-  - revenue accounts
-    - add one account for all revenue on that exchange
-  - for all accounts you create
-    - set the "notes identifier" in the notes field - see [supported exchanges](src/backends/exchanges/README.md#how-to-use-supported-exchanges) for what "notes identifier" to use
-  - for holdings outside your exchange where you deposit from or withdraw to you can configure [supported blockchains](src/backends/public_ledgers#how-to-use) to map transactions as transfers and not just deposits (by revenue) or withdrawals (to expenses).
-
-## Run as Docker container from Docker Hub
-
-Pull the image and run the container passing the needed environmental variables.
-
-```
+```sh
 docker pull financelurker/crypto-trades-firefly-iii:latest
-docker run --env.... financelurker/crypto-trades-firefly-iii:latest
+docker run --env ... financelurker/crypto-trades-firefly-iii:latest
 ```
 
-## Run as Docker container from repository
+### Run Standalone
 
-Check out the repository and build the docker image locally. Build the container and then run it by passing the needed environmental variables.
-
-```
-git clone https://github.com/financelurker/crypto-trades-firefly-iii.git
-cd crypto-trades-firefly-iii
-docker build .
-docker run --env....
-```
-
-## Run it standalone
-
-Check out the repository, make sure you set the environmental variables and start thy python script:
-
-```
+```sh
 git clone https://github.com/financelurker/crypto-trades-firefly-iii.git
 cd crypto-trades-firefly-iii
 python -m pip install --upgrade setuptools pip wheel
 python -m pip install --upgrade pyyaml
-python -m pip install Firefly-III-API-Client
-python -m pip install python-binance
-python -m pip install cryptocom-exchange
+python -m pip install Firefly-III-API-Client python-binance cryptocom-exchange
 python main.py
 ```
 
-If you are having any troubles, make sure you're using **python 3.9** (the corresponding Docker image is **"python:3.9-slim-buster"** for version referencing).
+---
 
-## Working environments
+## Configuration ⚙️
 
-- Firefly III Version 5.4.6
-- Binance API Change Log up to 2021-04-08
+Set the following environment variables to configure the service:
 
-## Configuration
+| Variable               | Description                                                  | Type    | Required | Default |
+| ---------------------- | ------------------------------------------------------------ | ------- | -------- | ------- |
+| `FIREFLY_HOST`         | URL to your Firefly III instance                             | string  | Yes      |         |
+| `FIREFLY_VALIDATE_SSL` | Enable/disable SSL certificate validation                    | boolean | No       | true    |
+| `FIREFLY_ACCESS_TOKEN` | Firefly III API access token                                 | string  | Yes      |         |
+| `SYNC_BEGIN_TIMESTAMP` | Earliest date for imported transactions (yyyy-MM-dd)         | date    | Yes      |         |
+| `SYNC_TRADES_INTERVAL` | How often to sync: `hourly`, `daily`, or `debug` (every 10s) | enum    | Yes      |         |
+| `DEBUG`                | Enable debug mode and add 'dev' tag to transactions          | boolean | No       | false   |
 
-### Multiple Exchanges
+For exchange-specific configuration, see [supported exchanges](src/backends/exchanges/README.md#how-to-use-supported-exchanges).
 
-As the whole functionality runs in a single blocking thread for all configured exchanges it is recommended to configure a new instance/docker container for each crypto exchange you're using. Otherwise the maintenance of one exchange will impact the import of all other exchanges as well.
+---
 
-### Environmental Variables
+## Imported Movements
 
-This image is configured via **environmental variables**. As there are many ways to set them up for your runtime environment please consult that documentation.
+### Executed Trades 💸
 
-Make sure you have them set as there is no exception handling for missing values from the environment.
-- **FIREFLY_HOST**
-  - Description: The url to your Firefly III instance you want to import trades. (e.g. "https://some-firefly-iii.instance:62443" and **make sure it's a test system for now!!**)
-  - Type: string
-- **FIREFLY_VALIDATE_SSL**
-  - Description: Enables or disables the validation of ssl certificates, if you're using your own x509 CA.
-    (there probably are better ways of doing this)
-  - Type: boolean [ false | any ]
-  - Optional
-  - Default: true
-- **FIREFLY_ACCESS_TOKEN**
-  - Description: Your access token you have created within your Firefly III instance.
-  - Type: string
-- **SYNC_BEGIN_TIMESTAMP**
-  - Description: The date of the transactions must not be older than this timestamp to be imported. This helps you to import from back to 2017 initially and once you have imported them all you can set the date to a date near the container runtime start to reduce probable bandwidth-costs on exchange-side. (e.g. "2018-01-22") as these APIs often work with rate-limiting.
-  - Type: date [ yyyy-MM-dd ]
-- **SYNC_TRADES_INTERVAL**
-  - Description: This defines on how often this module will check for new trades on all configured exchanges.
-    Only trades up to the last full interval (hour or day) are synchronized.
-    The debug mode fetches every 10 seconds.
-  - Type: enum [ hourly | daily | debug ]
-- **DEBUG**
-  - Description: Adds to each written object an additional 'dev' tag. As long as this arg is present the debug mode will be turned on.
-  - Type: boolean [ any ]
-  - Optional
-  - Default: false
-  
-For the configuration of relevant supported exchanges please [read here](src/backends/exchanges/README.md#how-to-use-supported-exchanges)
+- Each trade creates asset/currency transactions in Firefly III.
+- Paid commissions are imported as separate transactions.
+- All transactions are tagged and annotated for easy filtering.
 
-# How to extend this service
+### Received Interest 💰
 
-## Add supported Exchanges
+- Interest from savings/lending/staking is imported as revenue.
 
-Please see the documentation on [how to add supported exchanges](src/backends/exchanges).
+### Withdrawals & Deposits 📥📤
 
-## Add supported Blockchains
+- Crypto deposits/withdrawals are imported and can be classified as transfers for supported blockchains.
+- Unclassified transactions are tagged for later review.
 
-Please see the documentation on [how to add supported Blockchains](src/backends/public_ledgers).
+### On-/Off-ramping (SEPA) 🏦
 
-# Disclaimer
-This app needs access tokens for your Firefly III instance, and access tokens/API-Keys for your crypto trading platform account. It is absolutely okay to only give read-permissions to that access tokens/API-Keys, as there will be no writing actions to crypto trading platform by this service.
+- Planned for future releases.
+
+---
+
+## Troubleshooting 🐞
+
+- **No transactions imported?**
+  - Check your environment variables, especially API keys and tokens.
+  - Ensure your Firefly III instance is reachable and the access token is valid.
+  - Make sure your exchange API keys have the necessary permissions.
+- **SSL errors?**
+  - Set `FIREFLY_VALIDATE_SSL=false` if using self-signed certificates.
+- **Python errors about missing modules?**
+  - Run the install commands in the Quick Start section.
+- **Still stuck?**
+  - Check the logs (enable `DEBUG` for more detail) or open an issue on GitHub.
+
+---
+
+## Contributing 🤝
+
+Contributions are welcome! To get started:
+
+1. Fork the repository and create a new branch.
+2. Make your changes (add features, fix bugs, improve docs).
+3. Ensure code style and tests pass.
+4. Open a pull request with a clear description.
+
+For major changes, please open an issue first to discuss your proposal.
+
+---
+
+## How to Extend
+
+- **Add Supported Exchanges:** See [how to add supported exchanges](src/backends/exchanges).
+- **Add Supported Blockchains:** See [how to add supported blockchains](src/backends/public_ledgers).
+
+---
+
+## Disclaimer ⚠️
+
+This app requires access tokens for your Firefly III instance and API keys for your crypto trading platform account. Only grant the minimum permissions needed (read-only is sufficient for exchanges). Use at your own risk.
