@@ -59,6 +59,7 @@ def handle_deposits(from_timestamp, to_timestamp, init, trading_platform, exchan
     for account_collection in firefly_account_collections:
         list_of_assets.append(account_collection.security)
     deposits = exchange_interface.get_deposits(from_timestamp, to_timestamp, list_of_assets)
+    print(list(map(lambda x: x.amount, deposits)))
 
     if len(deposits) == 0:
         print(trading_platform + ':   No new deposits found.')
@@ -124,10 +125,12 @@ def handle_trades(from_timestamp, to_timestamp, init, trading_platform, exchange
         print(header_log)
 
     print(trading_platform + ': 1. Get eligible symbols from existing asset accounts within Firefly III')
+    print('symbols: ' + str(firefly_wrapper.get_symbols_and_codes(trading_platform)))
     list_of_trading_pairs = exchange_interface.get_trading_pairs(
         firefly_wrapper.get_symbols_and_codes(trading_platform))
 
     print(trading_platform + ': 2. Get trades from crypto currency exchange')
+    print(list_of_trading_pairs)
     list_of_trade_data = exchange_interface.get_trades(from_timestamp, to_timestamp, list_of_trading_pairs)
     firefly_account_collections = firefly_wrapper.get_firefly_account_collections_for_pairs(list_of_trading_pairs,
                                                                                             trading_platform)
@@ -200,7 +203,8 @@ def interval_processor(from_timestamp, to_timestamp, init, trading_platform):
     exchange_interface = exchange_interface_factory.get_specific_exchange_interface(trading_platform)
 
     firefly_account_collections, epochs_to_calculate = handle_trades(from_timestamp, to_timestamp, init, trading_platform, exchange_interface)
-    handle_interests(from_timestamp, to_timestamp, init, trading_platform, exchange_interface, firefly_account_collections, epochs_to_calculate)
+    print(firefly_account_collections)
+    # handle_interests(from_timestamp, to_timestamp, init, trading_platform, exchange_interface, firefly_account_collections, epochs_to_calculate)
     handle_withdrawals(from_timestamp, to_timestamp, init, trading_platform, exchange_interface, firefly_account_collections, epochs_to_calculate)
     handle_deposits(from_timestamp, to_timestamp, init, trading_platform, exchange_interface, firefly_account_collections, epochs_to_calculate)
     handle_unclassified_transactions(trading_platform)

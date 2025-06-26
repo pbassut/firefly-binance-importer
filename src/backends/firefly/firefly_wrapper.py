@@ -1,4 +1,5 @@
 from __future__ import print_function
+from pprint import pprint
 
 import datetime
 import hashlib
@@ -141,6 +142,7 @@ def get_symbols_and_codes(trading_platform):
                 else:
                     paging = False
 
+            pprint(accounts)
             for account in accounts:
                 if account.attributes.type == 'asset':
                     asset_accounts.append(account)
@@ -197,7 +199,7 @@ def write_new_received_interest_as_transaction(received_interest, account_collec
         if config.debug:
             tags.append('dev')
 
-        split = firefly_iii_client.TransactionSplit(
+        split = firefly_iii_client.TransactionSplitStore(
             amount=amount,
             date=received_interest.date,
             description=description,
@@ -210,12 +212,12 @@ def write_new_received_interest_as_transaction(received_interest, account_collec
             currency_symbol=currency_symbol,
             destination_name=account_collection.asset_account.attributes.name,
             destination_type=account_collection.asset_account.attributes.type,
-#            external_id=transaction_collection.trade_data.id,
+            external_id=account_collection.trade_data.id,
             notes=get_acc_revenue_key(trading_platform)
         )
-        split.import_hash_v2 = hash_transaction(split.amount, split.date, split.description, "", split.source_name, split.destination_name, split.tags)
+        # split.import_hash_v2 = hash_transaction(split.amount, split.date, split.description, "", split.source_name, split.destination_name, split.tags)
         list_inner_transactions.append(split)
-        new_transaction = firefly_iii_client.Transaction(apply_rules=False, transactions=list_inner_transactions, error_if_duplicate_hash=True)
+        new_transaction = firefly_iii_client.TransactionStore(apply_rules=False, transactions=list_inner_transactions, error_if_duplicate_hash=False)
 
         try:
             if config.debug:
@@ -252,7 +254,7 @@ def write_commission(transaction_collection, trading_platform):
         if config.debug:
             tags.append('dev')
 
-        split = firefly_iii_client.TransactionSplit(
+        split = firefly_iii_client.TransactionSplitStore(
             amount=amount,
             date=datetime.datetime.fromtimestamp(int(transaction_collection.trade_data.time / 1000)),
             description=description,
@@ -270,7 +272,7 @@ def write_commission(transaction_collection, trading_platform):
         )
         split.import_hash_v2 = hash_transaction(split.amount, split.date, split.description, split.external_id, split.source_name, split.destination_name, split.tags)
         list_inner_transactions.append(split)
-        new_transaction = firefly_iii_client.Transaction(apply_rules=False, transactions=list_inner_transactions, error_if_duplicate_hash=True)
+        new_transaction = firefly_iii_client.TransactionStore(apply_rules=False, transactions=list_inner_transactions, error_if_duplicate_hash=False)
 
         try:
             if config.debug:
@@ -284,14 +286,14 @@ def write_commission(transaction_collection, trading_platform):
                 message: str = trading_platform + ':   - There was an unknown error writing a new trade. Here\'s the trade id: "' + str(
                     transaction_collection.trade_data.id) + '"'
                 if config.debug:
-                    print(message % e)
+                    print(message, e)
                 else:
                     print(message)
         except Exception as e:
             message: str = trading_platform + ':   - There was an unknown error writing a new trade. Here\'s the trade id: "' + str(
                 transaction_collection.trade_data.id) + '"'
             if config.debug:
-                print(message % e)
+                print(message, e)
             else:
                 print(message)
 
@@ -341,28 +343,43 @@ def write_new_transaction(transaction_collection, trading_platform):
         if config.debug:
             tags.append('dev')
 
-        split = firefly_iii_client.TransactionSplit(
+        print('transaction_collection.from_ff_account.name: ' + transaction_collection.from_ff_account.name)
+        print('transaction_collection.to_ff_account.name: ' + transaction_collection.to_ff_account.name)
+        print('transaction_collection.from_ff_account.type: ' + transaction_collection.from_ff_account.type)
+        print('transaction_collection.to_ff_account.type: ' + transaction_collection.to_ff_account.type)
+        print('transaction_collection.from_ff_account.currency_code: ' + transaction_collection.from_ff_account.currency_code)
+        print('transaction_collection.to_ff_account.currency_code: ' + transaction_collection.to_ff_account.currency_code)
+        print('transaction_collection.from_ff_account.currency_symbol: ' + transaction_collection.from_ff_account.currency_symbol)
+        print('transaction_collection.to_ff_account.currency_symbol: ' + transaction_collection.to_ff_account.currency_symbol)
+        print('transaction_collection.from_ff_account.currency_id: ' + transaction_collection.from_ff_account.currency_id)
+        print('transaction_collection.to_ff_account.currency_id: ' + transaction_collection.to_ff_account.currency_id)
+        print('transaction_collection.trade_data.id: ', transaction_collection.trade_data.id)
+
+        split = firefly_iii_client.TransactionSplitStore(
             amount=amount,
             date=datetime.datetime.fromtimestamp(int(transaction_collection.trade_data.time / 1000)),
             description=description,
             type='transfer',
             tags=tags,
             reconciled=True,
+            source_id="4",
             source_name=transaction_collection.from_ff_account.name,
-            source_type=transaction_collection.from_ff_account.type,
+            source_type=transaction_collection.from_ff_account.type if transaction_collection.from_ff_account.type != 'asset' else 'Asset account',
             currency_code=currency_code,
             currency_symbol=currency_symbol,
+            destination_id="7",
             destination_name=transaction_collection.to_ff_account.name,
-            destination_type=transaction_collection.to_ff_account.type,
+            destination_type=transaction_collection.to_ff_account.type if transaction_collection.to_ff_account.type != 'asset' else 'Asset account',
             foreign_currency_code=foreign_currency_code,
             foreign_currency_symbol=foreign_currency_symbol,
-            foreign_amount=foreign_amount,
-            external_id=transaction_collection.trade_data.id,
+            foreign_amount=str(foreign_amount),
+            external_id=str(transaction_collection.trade_data.id),
             notes=get_tr_fee_key(transaction_collection.trade_data.trading_platform)
         )
-        split.import_hash_v2 = hash_transaction(split.amount, split.date, split.description, split.external_id, split.source_name, split.destination_name, split.tags)
+        print('split: ', split)
+        # split.import_hash_v2 = hash_transaction(split.amount, split.var_date, split.description, split.external_id, split.source_name, split.destination_name, split.tags)
         list_inner_transactions.append(split)
-        new_transaction = firefly_iii_client.Transaction(apply_rules=False, transactions=list_inner_transactions, error_if_duplicate_hash=True)
+        new_transaction = firefly_iii_client.TransactionStore(apply_rules=False, transactions=list_inner_transactions, error_if_duplicate_hash=False)
 
         try:
             if config.debug:
@@ -383,7 +400,7 @@ def write_new_transaction(transaction_collection, trading_platform):
             message: str = trading_platform + ':   - There was an unknown error writing a new trade. Here\'s the trade id: "' + str(
                 transaction_collection.trade_data.id) + '"'
             if config.debug:
-                print(message % e)
+                print(message, e)
             else:
                 print(message)
 
@@ -559,7 +576,7 @@ def write_new_withdrawal(withdrawal, account_collection, trading_platform):
         if config.debug:
             tags.append('dev')
 
-        split = firefly_iii_client.TransactionSplit(
+        split = firefly_iii_client.TransactionSplitStore(
             amount=amount,
             date=datetime.datetime.fromtimestamp(int(withdrawal.timestamp / 1000)),
             description=description,
@@ -572,12 +589,12 @@ def write_new_withdrawal(withdrawal, account_collection, trading_platform):
             currency_symbol=currency_symbol,
             destination_name=account_collection.expense_account.attributes.name,
             destination_type=account_collection.expense_account.attributes.type,
-            external_id=withdrawal.transaction_id,
+            external_id=str(withdrawal.transaction_id),
             notes=get_withdrawal_unclassified_key(trading_platform)
         )
         split.import_hash_v2 = hash_unclassifiable(split.amount, split.date, split.external_id, trading_platform, currency_code, split.tags)
         list_inner_transactions.append(split)
-        new_transaction = firefly_iii_client.Transaction(apply_rules=False, transactions=list_inner_transactions, error_if_duplicate_hash=True)
+        new_transaction = firefly_iii_client.TransactionStore(apply_rules=False, transactions=list_inner_transactions, error_if_duplicate_hash=False)
 
         try:
             if config.debug:
@@ -611,6 +628,7 @@ def import_withdrawals(withdrawals: List[WithdrawalData], firefly_account_collec
 
 
 def write_new_deposit(deposit: DepositData, account_collection, trading_platform):
+    print(firefly_config)
     with firefly_iii_client.ApiClient(firefly_config) as api_client:
         transaction_api = firefly_iii_client.TransactionsApi(api_client)
         list_inner_transactions = []
@@ -622,7 +640,7 @@ def write_new_deposit(deposit: DepositData, account_collection, trading_platform
         if config.debug:
             tags.append('dev')
 
-        split = firefly_iii_client.TransactionSplit(
+        split = firefly_iii_client.TransactionSplitStore(
             amount=amount,
             date=datetime.datetime.fromtimestamp(int(deposit.timestamp / 1000)),
             description=description,
@@ -638,14 +656,14 @@ def write_new_deposit(deposit: DepositData, account_collection, trading_platform
             external_id=deposit.transaction_id,
             notes=get_withdrawal_unclassified_key(trading_platform)
         )
-        split.import_hash_v2 = hash_unclassifiable(split.amount, split.date, split.external_id, trading_platform, currency_code, split.tags)
+        # split.import_hash_v2 = hash_unclassifiable(split.amount, split.date, split.external_id, trading_platform, currency_code, split.tags)
         list_inner_transactions.append(split)
-        new_transaction = firefly_iii_client.Transaction(apply_rules=False, transactions=list_inner_transactions, error_if_duplicate_hash=True)
+        new_transaction = firefly_iii_client.TransactionStore(apply_rules=False, transactions=list_inner_transactions, error_if_duplicate_hash=False)
 
         try:
             if config.debug:
                 print(trading_platform + ':   - Writing a new deposit.')
-            # pprint(new_transaction)
+            pprint(new_transaction)
             transaction_api.store_transaction(new_transaction)
         except ApiException as e:
             if e.status == 422 and "Duplicate of transaction" in e.body:
@@ -667,8 +685,13 @@ def write_new_deposit(deposit: DepositData, account_collection, trading_platform
 
 
 def import_deposits(deposits, firefly_account_collections, trading_platform):
+    print("import_deposits")
+    pprint(firefly_account_collections)
     for deposit in deposits:
+        pprint(deposit)
         for account_collection in firefly_account_collections:
+            pprint(deposit.asset)
+            pprint(account_collection.security)
             if deposit.asset == account_collection.security:
                 write_new_deposit(deposit, account_collection, trading_platform)
 
@@ -709,7 +732,7 @@ def rewrite_unclassified_deposit_transaction(transaction_data, relevant_firefly_
             tags.append('dev')
         description = trading_platform + " | DEPOSIT | Security: " + transaction_data.get("code")
 
-        split = firefly_iii_client.TransactionSplit(
+        split = firefly_iii_client.TransactionSplitStore(
             amount=inner_transaction.amount,
             date=inner_transaction.date,
             description=description,
@@ -727,7 +750,7 @@ def rewrite_unclassified_deposit_transaction(transaction_data, relevant_firefly_
         )
         split.import_hash_v2 = hash_unclassifiable(float(split.amount), split.date, split.external_id, trading_platform, split.currency_code, split.tags)
         list_inner_transactions.append(split)
-        new_transaction = firefly_iii_client.Transaction(apply_rules=False, transactions=list_inner_transactions, error_if_duplicate_hash=True)
+        new_transaction = firefly_iii_client.TransactionStore(apply_rules=False, transactions=list_inner_transactions, error_if_duplicate_hash=False)
 
         try:
             if config.debug:
@@ -766,7 +789,7 @@ def rewrite_unclassified_withdrawal_transaction(transaction_data, relevant_firef
             tags.append('dev')
         description = trading_platform + " | WITHDRAWAL | Security: " + transaction_data.get("code")
 
-        split = firefly_iii_client.TransactionSplit(
+        split = firefly_iii_client.TransactionSplitStore(
             amount=inner_transaction.amount,
             date=inner_transaction.date,
             description=description,
@@ -782,9 +805,9 @@ def rewrite_unclassified_withdrawal_transaction(transaction_data, relevant_firef
             external_id=inner_transaction.external_id,
             notes=get_withdrawal_classified_key(trading_platform)
         )
-        split.import_hash_v2 = hash_unclassifiable(float(split.amount), split.date, split.external_id, trading_platform, split.currency_code, split.tags)
+        # split.import_hash_v2 = hash_unclassifiable(float(split.amount), split.date, split.external_id, trading_platform, split.currency_code, split.tags)
         list_inner_transactions.append(split)
-        new_transaction = firefly_iii_client.Transaction(apply_rules=False, transactions=list_inner_transactions, error_if_duplicate_hash=True)
+        new_transaction = firefly_iii_client.TransactionStore(apply_rules=False, transactions=list_inner_transactions, error_if_duplicate_hash=False)
 
         try:
             if config.debug:

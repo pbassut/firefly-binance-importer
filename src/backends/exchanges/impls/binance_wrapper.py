@@ -93,11 +93,11 @@ class BinanceClient(AbstractCryptoExchangeClient):
 
         for product in binance_products:
             for potential_trading_pair in potential_trading_pairs:
-                if product.get('st') == 'TRADING' and \
-                        product.get('b') == potential_trading_pair.security and \
-                        product.get('q') == potential_trading_pair.currency:
-                    result.append(potential_trading_pair)
+                if product.get('st') == 'TRADING':
+                    if product.get('b') == potential_trading_pair.security and product.get('q') == potential_trading_pair.currency:
+                        result.append(potential_trading_pair)
 
+        print('result: ' + str(list(map(lambda x: x.security + x.currency, result))))
         return result
 
     def get_trades(self, from_timestamp, to_timestamp, list_of_trading_pairs) -> List[TradeData]:
@@ -161,9 +161,11 @@ class BinanceClient(AbstractCryptoExchangeClient):
 
         all_withdrawal_history = []
         while not from_datetime.timestamp() * 1000 >= to_timestamp:
+            print("from_datetime: " + str(from_datetime) + " to_datetime: " + str(to_datetime))
             withdrawal_history = self.client.get_withdraw_history(startTime=int(from_datetime.timestamp() * 1000),
                                                                   endTime=int(to_datetime.timestamp() * 1000))
-            all_withdrawal_history.extend(withdrawal_history.get('withdrawList'))
+            all_withdrawal_history.extend(withdrawal_history)
+
             from_datetime = datetime.fromtimestamp(to_datetime.timestamp() + 1)
             to_datetime = datetime.fromtimestamp(to_datetime.timestamp() + 90 * 24 * 60 * 60) \
                 if to_datetime.timestamp() + 90 * 24 * 60 * 60 * 1000 < to_timestamp else to_timestamp
@@ -192,7 +194,7 @@ class BinanceClient(AbstractCryptoExchangeClient):
         while not from_datetime.timestamp() * 1000 >= to_timestamp:
             deposit_history = self.client.get_deposit_history(startTime=int(from_datetime.timestamp() * 1000),
                                                               endTime=int(to_datetime.timestamp() * 1000))
-            all_deposit_history.extend(deposit_history.get('depositList'))
+            all_deposit_history.extend(deposit_history)
             from_datetime = datetime.fromtimestamp(to_datetime.timestamp() + 1)
             to_datetime = datetime.fromtimestamp(to_datetime.timestamp() + 90 * 24 * 60 * 60) \
                 if to_datetime.timestamp() + 90 * 24 * 60 * 60 * 1000 < to_timestamp else to_timestamp
@@ -213,9 +215,9 @@ class BinanceClient(AbstractCryptoExchangeClient):
             if base_config.debug:
                 print('Binance: Trying to connect to your account...')
             new_client = Client(self.config.api_key, self.config.api_secret)
-            if not new_client.get_account_status().get('success') is True:
+            print(new_client.get_account_status())
+            if new_client.get_account_status().get('data') != 'Normal':
                 raise Exception("Binance: Cannot access your account status.")
-            new_client.get_account_status()
             if base_config.debug:
                 print('Binance: Connection to your account established.')
             self.client = new_client
