@@ -21,8 +21,8 @@ class TransactionType(Enum):
 
 class TradingPair(object):
     def __init__(self, from_coin, to_coin):
-        self.security = from_coin
-        self.currency = to_coin
+        self.security = from_coin if from_coin != 'OPC' else 'OP'
+        self.currency = to_coin if to_coin != 'OPC' else 'OP'
 
 
 known_trading_pairs = []

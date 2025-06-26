@@ -20,7 +20,7 @@ FEE_TRANSACTION_IDENTIFIER_v3 = "crypto-trades-firefly-iii:binance"
 
 
 def migrate_identifiers():
-    firefly_wrapper.connect()
+    firefly_wrapper.FireflyWrapper("binance").connect()
     if config.debug:
         print("Migration: Checking if there are any account or transaction identifiers to migrate.")
     count_of_migrated_elements = 0

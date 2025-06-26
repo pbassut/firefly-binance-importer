@@ -1,4 +1,5 @@
 import os
+import logging
 
 
 def get_boolean_from_default_true(os, env_var_name):
@@ -26,3 +27,9 @@ try:
     debug = True
 except Exception as e:
     debug = False
+
+# Set up root logger level based on debug
+if 'debug' in globals() and debug:
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+else:
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
