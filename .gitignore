@@ -1,3 +1,6 @@
-/.idea/
+g.idea/
 /venv/
 **/__pycache__/
+bin/
+lib/
+pyvenv.cfg
