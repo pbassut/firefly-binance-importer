@@ -1,16 +1,24 @@
+from dotenv import load_dotenv
+load_dotenv()  # This loads variables from .env into os.environ
+
 import time
 import backends.exchanges as exchanges
+import os
 
-import config
 from backends.firefly import firefly_wrapper
 import migrate_firefly_identifiers
 from importer.sync_timer import SyncTimer
 import logging
 
+import config
+
 logger = logging.getLogger(__name__)
 
 firefly = firefly_wrapper.FireflyWrapper("binance")
 
+api_key = os.environ.get("BINANCE_API_KEY")
+if not api_key:
+    raise RuntimeError("BINANCE_API_KEY is required")
 
 def start():
     migrate_firefly_identifiers.migrate_identifiers()
