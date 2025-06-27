@@ -12,44 +12,15 @@ from model.savings import InterestData, InterestDue, SavingsType
 from model.transaction import TradeData, TransactionType, TradingPair
 from typing import List, Dict
 from model.withdrawal_deposit import WithdrawalData, DepositData
-from dateutil.relativedelta import relativedelta
-
+from utils import to_ms, from_ms, human_readable_interval, human_readable_interval_ts, interval
 import logging
+
 
 exchange_name = "Binance"
 
 one_day = 24 * 60 * 60
-    
-def to_ms(timestamp):
-    return int(timestamp * 1000)
 
-def from_ms(timestamp):
-    return int(timestamp / 1000)
-
-def human_readable_interval(from_datetime, to_datetime):
-    return str(from_datetime) + " to " + str(to_datetime - relativedelta(seconds=1))
-
-def human_readable_interval_ts(from_timestamp, to_timestamp):
-    return human_readable_interval(datetime.fromtimestamp(from_ms(from_timestamp)), datetime.fromtimestamp(from_ms(to_timestamp)))
-
-def days_ms(timestamp, days=90):
-    return timestamp + days * one_day
-
-def interval(from_timestamp, to_timestamp, days=90):
-    from_datetime = datetime.fromtimestamp(from_ms(from_timestamp))
-    to_datetime = from_datetime + relativedelta(days=days)
-
-    end_datetime = datetime.fromtimestamp(from_ms(to_timestamp))
-    while from_datetime < end_datetime:
-        if to_datetime > end_datetime:
-            to_datetime = end_datetime
-
-        yield from_datetime, to_datetime
-
-        from_datetime = to_datetime + relativedelta(days=1)
-        to_datetime = from_datetime + relativedelta(days=days)
-
-class BinanceConfig(Dict):
+class Config(Dict):
     failed = False
     enabled = False
     initialized = False
@@ -67,10 +38,10 @@ class BinanceConfig(Dict):
 
 
 @AbstractCryptoExchangeClientModule.register
-class BinanceClientModule(AbstractCryptoExchangeClientModule):
+class ClientModule(AbstractCryptoExchangeClientModule):
 
     def is_enabled(self) -> bool:
-        config = BinanceConfig()
+        config = Config()
         config.init()
         return config.enabled
 
@@ -78,34 +49,34 @@ class BinanceClientModule(AbstractCryptoExchangeClientModule):
         return exchange_name
 
     def get_exchange_client(self) -> AbstractCryptoExchangeClient:
-        return BinanceClient()
+        return ClientClass()
 
     @staticmethod
     def get_instance():
-        return BinanceClientModule()
+        return ClientModule()
 
 
-def get_interest_data_from_binance_data(binance_data, type, due) -> InterestData:
-    amount = binance_data.get('interest')
-    currency = binance_data.get('asset')
-    date = datetime.fromtimestamp(int(binance_data.get('time')) / 1000)
+def get_interest_data_from_data(data, type, due) -> InterestData:
+    amount = data.get('interest')
+    currency = data.get('asset')
+    date = datetime.fromtimestamp(int(data.get('time')) / 1000)
 
     return InterestData(type, amount, currency, date, due)
 
 
-def get_interests_from_binance_data(interests_binance_data, savings_type, interest_due) -> List[InterestData]:
+def get_interests_from_data(interests_data, savings_type, interest_due) -> List[InterestData]:
     result = []
-    for interest_binance_data in interests_binance_data:
-        inner = get_interest_data_from_binance_data(interest_binance_data, savings_type, interest_due)
+    for interest_data in interests_data:
+        inner = get_interest_data_from_data(interest_data, savings_type, interest_due)
         result.append(inner)
     return result
 
 
 @AbstractCryptoExchangeClient.register
-class BinanceClient(AbstractCryptoExchangeClient):
+class ClientClass(AbstractCryptoExchangeClient):
     client = None
 
-    config = BinanceConfig()
+    config = Config()
     config.init()
 
     def __init__(self):
@@ -180,12 +151,12 @@ class BinanceClient(AbstractCryptoExchangeClient):
         result = []
         lending_interest_history_daily = self.client.get_lending_interest_history(lendingType="DAILY", startTime=from_timestamp, endTime=to_timestamp, size=100)
 
-        result.extend(get_interests_from_binance_data(lending_interest_history_daily, SavingsType.LENDING, InterestDue.DAILY))
+        result.extend(get_interests_from_data(lending_interest_history_daily, SavingsType.LENDING, InterestDue.DAILY))
         lending_interest_history_activity = self.client.get_lending_interest_history(lendingType="ACTIVITY", startTime=from_timestamp, endTime=to_timestamp, size=100)
-        result.extend(get_interests_from_binance_data(lending_interest_history_activity, SavingsType.LENDING, InterestDue.ACTIVE))
+        result.extend(get_interests_from_data(lending_interest_history_activity, SavingsType.LENDING, InterestDue.ACTIVE))
 
         lending_interest_history_fixed = self.client.get_lending_interest_history(lendingType="CUSTOMIZED_FIXED", startTime=from_timestamp, endTime=to_timestamp, size=100)
-        result.extend(get_interests_from_binance_data(lending_interest_history_fixed, SavingsType.LENDING, InterestDue.FIXED))
+        result.extend(get_interests_from_data(lending_interest_history_fixed, SavingsType.LENDING, InterestDue.FIXED))
 
         return result
 

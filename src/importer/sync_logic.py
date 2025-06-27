@@ -8,6 +8,7 @@ import re
 from backends.public_ledgers import available_explorer
 import logging
 from datetime import datetime
+from utils import from_ms
 
 class SyncLogic:
     def __init__(self, trading_platform):
@@ -131,8 +132,8 @@ class SyncLogic:
 
     def handle_trades(self, from_timestamp, to_timestamp, init, exchange_interface):
         epochs_to_calculate = self.get_epochs_differences(from_timestamp, to_timestamp, config.sync_inverval)
-        from_date = datetime.fromtimestamp(from_timestamp / 1000)
-        to_date = datetime.fromtimestamp(to_timestamp / 1000)
+        from_date = datetime.fromtimestamp(from_ms(from_timestamp))
+        to_date = datetime.fromtimestamp(from_ms(to_timestamp))
         if init:
             self.log.debug("Importing all historical trades from " + str(from_date) + " to " + str(to_date))
         else:
@@ -192,6 +193,7 @@ class SyncLogic:
         supported_blockchains = {}
         for explorer_module in available_explorer:
             supported_blockchains.setdefault(explorer_module.get_blockchain_name(), explorer_module.get_blockchain_explorer())
+        self.log.debug("Supported blockchains: " + str(supported_blockchains))
         account_collections = [
             self.firefly.create_firefly_account_collection(security)
             for security in supported_blockchains.keys()

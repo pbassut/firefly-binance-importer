@@ -16,33 +16,11 @@ from model.withdrawal_deposit import WithdrawalData, DepositData
 
 import logging
 
+from backends.firefly.transaction_collection import TransactionCollection
+from backends.firefly.account_collection import AccountCollection
+
 # Set up logger for this module
 logger = logging.getLogger(__name__)
-
-class TransactionCollection(object):
-    def __init__(self, trade_data, _from_ff_account, _to_ff_account, _commission_ff_account, _from_commission_account):
-        self.trade_data = trade_data
-        self.from_ff_account = _from_ff_account
-        self.to_ff_account = _to_ff_account
-        self.commission_account = _commission_ff_account
-        self.from_commission_account = _from_commission_account
-
-
-class FireflyAccountCollection(object):
-    def __init__(self, security):
-        self.security = security
-        self.asset_account = None
-        self.expense_account = None
-        self.revenue_account = None
-
-    def set_expense_account(self, _expense_account):
-        self.expense_account = _expense_account
-
-    def set_revenue_account(self, _revenue_account):
-        self.revenue_account = _revenue_account
-
-    def set_asset_account(self, _asset_account):
-        self.asset_account = _asset_account
 
 urllib3.disable_warnings()
 
@@ -455,7 +433,7 @@ class FireflyWrapper:
 
 
     def create_firefly_account_collection(self, security):
-        result = FireflyAccountCollection(security)
+        result = AccountCollection(security)
 
         asset_account = self.get_asset_account_for_security(security)
         result.set_asset_account(asset_account)
@@ -709,6 +687,7 @@ class FireflyWrapper:
 
     def rewrite_unclassified_transactions(self, transactions, account_address_mapping):
         logger.info("Rewriting %d deposits/withdrawals.", len(transactions))
+
         for transaction in transactions:
             transaction_data = transactions.get(transaction)
             [inner_transaction] = transaction_data.get("firefly").attributes.transactions
