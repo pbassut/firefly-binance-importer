@@ -7,6 +7,7 @@ from typing import List
 import re
 from backends.public_ledgers import available_explorer
 import logging
+from datetime import datetime
 
 class SyncLogic:
     def __init__(self, trading_platform):
@@ -22,8 +23,6 @@ class SyncLogic:
 
 
     def augment_transaction_collection_with_firefly_accounts(self, transaction_collection, firefly_account_collection):
-        self.log.debug(firefly_account_collection)
-
         if transaction_collection.trade_data.type is TransactionType.BUY:
             if firefly_account_collection.security == transaction_collection.trade_data.trading_pair.security:
                 transaction_collection.to_ff_account = firefly_account_collection.asset_account.attributes
@@ -43,11 +42,11 @@ class SyncLogic:
         if firefly_account_collection.security == commission_asset:
             transaction_collection.commission_account = firefly_account_collection.expense_account.attributes
 
-        self.log.debug('Trade data type: ' + str(transaction_collection.trade_data.type))
-        self.log.debug('Commission asset: ' + commission_asset)
-        self.log.debug('Firefly account symbol: ' + str(firefly_account_collection.asset_account.attributes.currency_symbol))
-        self.log.debug('Firefly account code: ' + str(firefly_account_collection.asset_account.attributes.currency_code))
-        self.log.debug('Commission asset found: ' + str(firefly_account_collection.asset_account.attributes))
+        # self.log.debug('Trade data type: ' + str(transaction_collection.trade_data.type))
+        # self.log.debug('Commission asset: ' + commission_asset)
+        # self.log.debug('Firefly account symbol: ' + str(firefly_account_collection.asset_account.attributes.currency_symbol))
+        # self.log.debug('Firefly account code: ' + str(firefly_account_collection.asset_account.attributes.currency_code))
+        # self.log.debug('Commission asset found: ' + str(firefly_account_collection.asset_account.attributes))
         if commission_asset in firefly_account_collection.asset_account.attributes.currency_symbol \
                 or commission_asset in firefly_account_collection.asset_account.attributes.currency_code:
             transaction_collection.from_commission_account = firefly_account_collection.asset_account.attributes
@@ -61,10 +60,12 @@ class SyncLogic:
 
     def handle_deposits(self, from_timestamp, to_timestamp, init, exchange_interface,
                         firefly_account_collections, epochs_to_calculate):
+        from_date = datetime.fromtimestamp(from_timestamp / 1000)
+        to_date = datetime.fromtimestamp(to_timestamp / 1000)
         if init:
-            self.log.debug("Importing all historical deposits from " + str(from_timestamp) + " to " + str(to_timestamp))
+            self.log.debug("Importing all historical deposits from " + str(from_date) + " to " + str(to_date))
         else:
-            self.log.debug("Importing deposits from " + str(from_timestamp) + " to " + str(to_timestamp) + ", " + str(epochs_to_calculate) + " intervals.")
+            self.log.debug("Importing deposits from " + str(from_date) + " to " + str(to_date) + ", " + str(epochs_to_calculate) + " intervals.")
 
 
         self.log.debug("1. Get deposits from exchange")
@@ -84,10 +85,12 @@ class SyncLogic:
 
     def handle_withdrawals(self, from_timestamp, to_timestamp, init, exchange_interface,
                         firefly_account_collections, epochs_to_calculate):
+        from_date = datetime.fromtimestamp(from_timestamp / 1000)
+        to_date = datetime.fromtimestamp(to_timestamp / 1000)
         if init:
-            self.log.debug("Importing all historical withdrawals from " + str(from_timestamp) + " to " + str(to_timestamp))
+            self.log.debug("Importing all historical withdrawals from " + str(from_date) + " to " + str(to_date))
         else:
-            self.log.debug("Importing withdrawals from " + str(from_timestamp) + " to " + str(to_timestamp) + ", " + str(epochs_to_calculate) + " intervals.")
+            self.log.debug("Importing withdrawals from " + str(from_date) + " to " + str(to_date) + ", " + str(epochs_to_calculate) + " intervals.")
 
         self.log.debug("1. Get received withdrawals from exchange")
         list_of_assets = []
@@ -105,10 +108,12 @@ class SyncLogic:
 
     def handle_interests(self, from_timestamp, to_timestamp, init, exchange_interface,
                         firefly_account_collections, epochs_to_calculate):
+        from_date = datetime.fromtimestamp(from_timestamp / 1000)
+        to_date = datetime.fromtimestamp(to_timestamp / 1000)
         if init:
-            self.log.debug("Importing all historical interests from " + str(from_timestamp) + " to " + str(to_timestamp))
+            self.log.debug("Importing all historical interests from " + str(from_date) + " to " + str(to_date))
         else:
-            self.log.debug("Importing interests from " + str(from_timestamp) + " to " + str(to_timestamp) + ", " + str(epochs_to_calculate) + " intervals.")
+            self.log.debug("Importing interests from " + str(from_date) + " to " + str(to_date) + ", " + str(epochs_to_calculate) + " intervals.")
 
         self.log.debug("1. Get received interest from savings from exchange")
         list_of_assets = []
@@ -126,10 +131,12 @@ class SyncLogic:
 
     def handle_trades(self, from_timestamp, to_timestamp, init, exchange_interface):
         epochs_to_calculate = self.get_epochs_differences(from_timestamp, to_timestamp, config.sync_inverval)
+        from_date = datetime.fromtimestamp(from_timestamp / 1000)
+        to_date = datetime.fromtimestamp(to_timestamp / 1000)
         if init:
-            self.log.debug("Importing all historical trades from " + str(from_timestamp) + " to " + str(to_timestamp))
+            self.log.debug("Importing all historical trades from " + str(from_date) + " to " + str(to_date))
         else:
-            self.log.debug("Importing trades from " + str(from_timestamp) + " to " + str(to_timestamp) + ", " + str(epochs_to_calculate) + " intervals.")
+            self.log.debug("Importing trades from " + str(from_date) + " to " + str(to_date) + ", " + str(epochs_to_calculate) + " intervals.")
 
         self.log.debug("1. Get eligible symbols from existing asset accounts within Firefly III")
         self.log.debug('symbols: ' + str(self.firefly.get_symbols_and_codes()))
@@ -206,14 +213,13 @@ class SyncLogic:
         firefly_transactions = self.firefly.get_transactions("unclassified-transaction", supported_blockchains)
         transactions = self.get_transactions_from_blockchain(firefly_transactions, supported_blockchains)
         # 3. rewrite transactions in Firefly-III
-        self.firefly.rewrite_unclassified_transactions(transactions, account_address_mapping, account_collections)
+        self.firefly.rewrite_unclassified_transactions(transactions, account_address_mapping) #, account_collections)
 
 
     def interval_processor(self, from_timestamp, to_timestamp, init):
         exchange_interface = exchange_interface_factory.get_specific_exchange_interface(self.trading_platform)
         firefly_account_collections, epochs_to_calculate = self.handle_trades(from_timestamp, to_timestamp, init, exchange_interface)
-        self.log.debug(firefly_account_collections)
-        # self.handle_interests(from_timestamp, to_timestamp, init, trading_platform, exchange_interface, firefly_account_collections, epochs_to_calculate)
+        # self.handle_interests(from_timestamp, to_timestamp, init, exchange_interface, firefly_account_collections, epochs_to_calculate)
         self.handle_withdrawals(from_timestamp, to_timestamp, init, exchange_interface, firefly_account_collections, epochs_to_calculate)
         self.handle_deposits(from_timestamp, to_timestamp, init, exchange_interface, firefly_account_collections, epochs_to_calculate)
         self.handle_unclassified_transactions()

@@ -146,7 +146,6 @@ class FireflyWrapper:
                     else:
                         paging = False
 
-                logger.debug(accounts)
                 for account in accounts:
                     if account.attributes.type == 'asset':
                         asset_accounts.append(account)
@@ -268,17 +267,14 @@ class FireflyWrapper:
             new_transaction = firefly_iii_client.TransactionStore(apply_rules=False, transactions=list_inner_transactions, error_if_duplicate_hash=True)
 
             try:
-                logger.info(f"Writing a new paid commission.")
                 transaction_api.store_transaction(new_transaction)
+                logger.info(f"Successfully wrote a new paid commission #{transaction_collection.trade_data.id}")
             except ApiException as e:
                 if e.status == 422 and "Duplicate of transaction" in e.body:
-                    logger.warning(f"Duplicate commission transaction detected. Here's the trade id: '{transaction_collection.trade_data.id}'")
+                    logger.debug(f"Duplicate commission transaction #{transaction_collection.trade_data.id}")
                 else:
                     message: str = f"There was an unknown error writing a new paid commission. Here's the trade id: '{transaction_collection.trade_data.id}'"
                     logger.error(message, exc_info=config.debug)
-            except Exception as e:
-                message: str = f"There was an unknown error writing a new paid commission. Here's the trade id: '{transaction_collection.trade_data.id}'"
-                logger.error(message, exc_info=config.debug)
 
 
     def hash_unclassifiable(self, amount, date, external_id, currency_code: str, tags: List[str]):
@@ -326,9 +322,6 @@ class FireflyWrapper:
                 tags.append('dev')
             description = self.trading_platform + ' | ' + type_string + " | Security: " + transaction_collection.trade_data.trading_pair.security + " | Currency: " + transaction_collection.trade_data.trading_pair.currency + " | Ticker " + transaction_collection.trade_data.trading_pair.security + transaction_collection.trade_data.trading_pair.currency
 
-            logger.debug(transaction_collection)
-            logger.debug('currency_code: ' + currency_code)
-
             split = firefly_iii_client.TransactionSplitStore(
                 amount=amount,
                 date=datetime.datetime.fromtimestamp(int(transaction_collection.trade_data.time / 1000)),
@@ -348,25 +341,20 @@ class FireflyWrapper:
                 external_id=str(transaction_collection.trade_data.id),
                 notes=self.get_tr_fee_key()
             )
-            logger.debug(split)
             # split.import_hash_v2 = hash_transaction(split.amount, split.var_date, split.description, split.external_id, split.source_name, split.destination_name, split.tags)
             list_inner_transactions.append(split)
             new_transaction = firefly_iii_client.TransactionStore(apply_rules=False, transactions=list_inner_transactions, error_if_duplicate_hash=True)
 
             try:
-                logger.info(f"Writing a new trade.")
                 transaction_api.store_transaction(new_transaction)
-
                 self.write_commission(transaction_collection)
+                logger.info(f"Successfully wrote a new trade #'{transaction_collection.trade_data.id}'")
             except ApiException as e:
                 if e.status == 422 and "Duplicate of transaction" in e.body:
-                    logger.warning(f"Duplicate trade transaction detected. Here's the trade id: '{transaction_collection.trade_data.id}'")
+                    logger.debug(f"Duplicated transaction #{transaction_collection.trade_data.id}")
                 else:
-                    message: str = f"There was an unknown error writing a new trade. Here's the trade id: '{transaction_collection.trade_data.id}'"
+                    message: str = f"Unknown error when writing a new trade #'{transaction_collection.trade_data.id}'"
                     logger.error(message, exc_info=config.debug)
-            except Exception as e:
-                message: str = f"There was an unknown error writing a new trade. Here's the trade id: '{transaction_collection.trade_data.id}'"
-                logger.error(message, exc_info=config.debug)
 
 
     def get_accounts_from_firefly(self, supported_blockchain, account_type, notes_keywords):
@@ -544,9 +532,6 @@ class FireflyWrapper:
                 else:
                     message: str = f"There was an unknown error writing a new withdrawal. Here's the transaction id: '{withdrawal.transaction_id}'"
                     logger.error(message, exc_info=config.debug)
-            except Exception as e:
-                message: str = f"There was an unknown error writing a new withdrawal. Here's the transaction id: '{withdrawal.transaction_id}'"
-                logger.error(message, exc_info=config.debug)
 
 
     def import_withdrawals(self, withdrawals: List[WithdrawalData], firefly_account_collections):
@@ -595,9 +580,6 @@ class FireflyWrapper:
                 else:
                     message: str = f"There was an unknown error writing a new deposit. Here's the transaction id: '{deposit.transaction_id}'"
                     logger.error(message, exc_info=config.debug)
-            except Exception as e:
-                message: str = f"There was an unknown error writing a new deposit. Here's the transaction id: '{deposit.transaction_id}'"
-                logger.error(message, exc_info=config.debug)
 
 
     def import_deposits(self, deposits, firefly_account_collections):
@@ -639,7 +621,8 @@ class FireflyWrapper:
             [inner_transaction] = transaction_data.get("firefly").attributes.transactions
 
             tags = inner_transaction.tags
-            tags.append('dev')
+            if config.debug:
+                tags.append('dev')
             description = self.trading_platform + " | DEPOSIT | Security: " + transaction_data.get("code")
 
             split = firefly_iii_client.TransactionSplitStore(
@@ -685,7 +668,8 @@ class FireflyWrapper:
             [inner_transaction] = transaction_data.get("firefly").attributes.transactions
 
             tags = inner_transaction.tags
-            tags.append('dev')
+            if config.debug:
+                tags.append('dev')
             description = self.trading_platform + " | WITHDRAWAL | Security: " + transaction_data.get("code")
 
             split = firefly_iii_client.TransactionSplitStore(

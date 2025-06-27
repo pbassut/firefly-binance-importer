@@ -12,25 +12,42 @@ from model.savings import InterestData, InterestDue, SavingsType
 from model.transaction import TradeData, TransactionType, TradingPair
 from typing import List, Dict
 from model.withdrawal_deposit import WithdrawalData, DepositData
+from dateutil.relativedelta import relativedelta
 
 import logging
 
 exchange_name = "Binance"
 
-
-def human_readable_interval(from_timestamp, to_timestamp):
-    return str(datetime.fromtimestamp(from_timestamp / 1000)) + " to " + str(datetime.fromtimestamp(to_timestamp / 1000 - 1))
-
+one_day = 24 * 60 * 60
+    
 def to_ms(timestamp):
     return int(timestamp * 1000)
 
 def from_ms(timestamp):
     return int(timestamp / 1000)
 
-twentyfour_hours = 24 * 60 * 60
+def human_readable_interval(from_datetime, to_datetime):
+    return str(from_datetime) + " to " + str(to_datetime - relativedelta(seconds=1))
 
-def ninety_days_ms(timestamp):
-    return timestamp + 90 * twentyfour_hours * 1000
+def human_readable_interval_ts(from_timestamp, to_timestamp):
+    return human_readable_interval(datetime.fromtimestamp(from_ms(from_timestamp)), datetime.fromtimestamp(from_ms(to_timestamp)))
+
+def days_ms(timestamp, days=90):
+    return timestamp + days * one_day
+
+def interval(from_timestamp, to_timestamp, days=90):
+    from_datetime = datetime.fromtimestamp(from_ms(from_timestamp))
+    to_datetime = from_datetime + relativedelta(days=days)
+
+    end_datetime = datetime.fromtimestamp(from_ms(to_timestamp))
+    while from_datetime < end_datetime:
+        if to_datetime > end_datetime:
+            to_datetime = end_datetime
+
+        yield from_datetime, to_datetime
+
+        from_datetime = to_datetime + relativedelta(days=1)
+        to_datetime = from_datetime + relativedelta(days=days)
 
 class BinanceConfig(Dict):
     failed = False
@@ -121,37 +138,36 @@ class BinanceClient(AbstractCryptoExchangeClient):
         return result
 
     def get_trades(self, from_timestamp, to_timestamp, list_of_trading_pairs) -> List[TradeData]:
-        list_of_trades: List[TradeData] = []
-
-        self.log.debug("Get trades from " + human_readable_interval(from_timestamp, to_timestamp))
+        self.log.debug("Get trades from " + human_readable_interval_ts(from_timestamp, to_timestamp))
         self.log.debug(self.get_trading_pair_message_log(list_of_trading_pairs))
 
+        list_of_trades: List[TradeData] = []
         for trading_pair in list_of_trading_pairs:
             symbol = trading_pair.security + trading_pair.currency
 
             try:
-                if from_ms(to_timestamp - from_timestamp) - 1 > twentyfour_hours:
+                if from_ms(to_timestamp - from_timestamp) - 1 > one_day:
                     trades_total = self.client.get_my_trades(symbol=symbol)
                     relevant_trades = []
                     for trade in trades_total:
                         if int(trade.get('time')) - from_timestamp >= 0:
                             relevant_trades.append(trade)
+
                     my_trades = relevant_trades
                 else:
                     my_trades = self.client.get_my_trades(symbol=symbol, startTime=from_timestamp, endTime=to_timestamp)
 
                 if len(my_trades) > 0:
-                    list_of_trades.extend(transform_to_trade_data(my_trades, trading_pair))
-                    self.log.debug(my_trades)
                     self.log.debug("Found " + str(len(my_trades)) + " trades for " + symbol)
+                    list_of_trades.extend(transform_to_trade_data(my_trades, trading_pair))
             except BinanceAPIException as e:
                 if e.status_code == 400 and e.code == -1100:
-                    # logger.debug("Invalid character found in trading pair: " + trading_pair)
-                    # self.invalid_trading_pairs.append(trading_pair.security + trading_pair.currency)
+                    self.log.debug("Invalid character found in trading pair: " + trading_pair)
+                    self.invalid_trading_pairs.append(trading_pair.security + trading_pair.currency)
                     pass
                 elif e.status_code == 400 and e.code == -1121:
-                    # logger.debug("Invalid trading pair found: " + trading_pair)
-                    # self.invalid_trading_pairs.append(trading_pair.security + trading_pair.currency)
+                    self.log.debug("Invalid trading pair found: " + trading_pair)
+                    self.invalid_trading_pairs.append(trading_pair.security + trading_pair.currency)
                     pass
                 else:
                     self.log.error(e)
@@ -159,7 +175,7 @@ class BinanceClient(AbstractCryptoExchangeClient):
         return list_of_trades
 
     def get_savings_interests(self, from_timestamp, to_timestamp, list_of_assets) -> List[InterestData]:
-        self.log.debug("Get interest from " + human_readable_interval(from_timestamp, to_timestamp))
+        self.log.debug("Get interest from " + human_readable_interval_ts(from_timestamp, to_timestamp))
 
         result = []
         lending_interest_history_daily = self.client.get_lending_interest_history(lendingType="DAILY", startTime=from_timestamp, endTime=to_timestamp, size=100)
@@ -174,20 +190,17 @@ class BinanceClient(AbstractCryptoExchangeClient):
         return result
 
     def get_withdrawals(self, from_timestamp: int, to_timestamp: int, list_of_assets: List[str]) -> List[WithdrawalData]:
-        self.log.debug("Get withdrawals from " + human_readable_interval(from_timestamp, to_timestamp))
-
-        from_datetime = datetime.fromtimestamp(from_ms(from_timestamp))
-        to_datetime = datetime.fromtimestamp(from_ms(from_timestamp) + 90 * twentyfour_hours)
+        self.log.debug("Get withdrawals from " + human_readable_interval_ts(from_timestamp, to_timestamp))
 
         all_withdrawal_history = []
-        while not to_ms(from_datetime.timestamp()) >= to_timestamp:
+        for from_datetime, to_datetime in interval(from_timestamp, to_timestamp):
+            self.log.debug("Fetching page of withdrawals: " + human_readable_interval(from_datetime, to_datetime))
             withdrawal_history = self.client.get_withdraw_history(startTime=to_ms(from_datetime.timestamp()),
-                                                                  endTime=to_ms(to_datetime.timestamp()))
+                                                                  endTime=to_ms(to_datetime.timestamp()),
+                                                                  limit=1000)
             all_withdrawal_history.extend(withdrawal_history)
 
-            from_datetime = datetime.fromtimestamp(to_datetime.timestamp() + 1)
-            ninety_days_ahead = ninety_days_ms(to_datetime.timestamp())
-            to_datetime = datetime.fromtimestamp(ninety_days_ahead if ninety_days_ahead < to_timestamp else to_timestamp)
+        self.log.debug("Found " + str(len(all_withdrawal_history)) + " withdrawals")
 
         return [
             WithdrawalData(
@@ -202,20 +215,17 @@ class BinanceClient(AbstractCryptoExchangeClient):
         ]
 
     def get_deposits(self, from_timestamp: int, to_timestamp: int, list_of_assets: List[str]) -> List[DepositData]:
-        self.log.debug("Get deposits from " + human_readable_interval(from_timestamp, to_timestamp))
-
-        from_datetime = datetime.fromtimestamp(from_ms(from_timestamp))
-        to_datetime = datetime.fromtimestamp(from_ms(from_timestamp) + 90 * twentyfour_hours)
+        self.log.debug("Get deposits from " + human_readable_interval_ts(from_timestamp, to_timestamp))
 
         all_deposit_history = []
-        while not to_ms(from_datetime.timestamp()) >= to_timestamp:
-            deposit_history = self.client.get_deposit_history(startTime=to_ms(from_datetime.timestamp()),
-                                                              endTime=to_ms(to_datetime.timestamp()))
+        for from_date, to_date in interval(from_timestamp, to_timestamp):
+            self.log.debug("Fetching page of deposits: " + human_readable_interval(from_date, to_date))
+            deposit_history = self.client.get_deposit_history(startTime=to_ms(from_date.timestamp()),
+                                                              endTime=to_ms(to_date.timestamp()),
+                                                              limit=1000)
             all_deposit_history.extend(deposit_history)
-            from_datetime = datetime.fromtimestamp(to_datetime.timestamp() + 1)
-            to_datetime = datetime.fromtimestamp(ninety_days_ms(to_datetime.timestamp())) \
-                if to_datetime.timestamp() < to_timestamp else to_timestamp
 
+        self.log.debug("Found " + str(len(all_deposit_history)) + " deposits")
         return [
             DepositData(
                 trading_platform=exchange_name,
