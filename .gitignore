@@ -4,3 +4,5 @@ g.idea/
 bin/
 lib/
 pyvenv.cfg
+.env.development
+.env
