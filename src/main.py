@@ -1,15 +1,13 @@
-from dotenv import load_dotenv
-load_dotenv()  # This loads variables from .env into os.environ
-
+import config
 import time
 import backends.exchanges as exchanges
 
 from backends.firefly import firefly_wrapper
 import migrate_firefly_identifiers
+from importer.sync_logic import IntervalEnum
 from importer.sync_timer import SyncTimer
 import logging
 
-import config
 
 logger = logging.getLogger(__name__)
 
@@ -26,47 +24,37 @@ def start():
 
 def worker(meta_class_instances):
     if not firefly.connect():
+        logger.error('Failed to connect to Firefly III. Exit!')
         exit(-12)
 
     interval_seconds = 0
-    if config.sync_inverval == 'hourly':
+    if config.sync_inverval == IntervalEnum.HOURLY:
         interval_seconds = 3600
-    elif config.sync_inverval == 'daily':
+    elif config.sync_inverval == IntervalEnum.DAILY:
         interval_seconds = 3600 * 24
-    elif config.sync_inverval == 'debug':
+    elif config.sync_inverval == IntervalEnum.DEBUG:
         interval_seconds = 10
     else:
         logger.error("The configured interval is not supported. Use 'hourly' or 'daily' within your config.")
         exit(-749)
 
-    exchanges_list = []
-
-    for meta_class in meta_class_instances:
-        exchanges_list.append({
-            'name': meta_class.get_exchange_name(),
-            'timer_object': SyncTimer(meta_class.get_exchange_name()) if meta_class.is_enabled() else None
-        })
-
-    exchanges_available = False
-    for exchange in exchanges_list:
-        if exchange.get('timer_object') is not None:
-            exchanges_available = True
-
-    if not exchanges_available:
+    if all(map(lambda exchange: exchange.is_enabled(), meta_class_instances)):
         logger.error("There are no exchanges configured. Exit!")
         exit(0)
 
-    for exchange in exchanges_list:
-        if exchange.get('timer_object') is None:
-            continue
-        exchange.get('timer_object').initial_sync()
+    exchanges_list = []
+    for cls in meta_class_instances:
+        exchange_name = cls.get_exchange_name()
+        exchanges_list.append({ 'name': exchange_name, 'syncer': SyncTimer(exchange_name) })
+
+    map(lambda exchange: exchange.get('syncer').initial_sync(), exchanges_list)
 
     while True:
+        logger.info('Sleeping for %d seconds', interval_seconds)
         time.sleep(interval_seconds)
-        for exchange in exchanges_list:
-            if exchange.get('timer_object') is None:
-                continue
-            exchange.get('timer_object').sync()
 
+        for exchange in exchanges_list:
+            logger.info('Syncing %s', exchange.get('name'))
+            exchange.get('syncer').sync()
 
 start()

@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import os
+import sys
 
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
@@ -74,7 +75,7 @@ def get_interests_from_data(interests_data, savings_type, interest_due) -> List[
 
 @AbstractCryptoExchangeClient.register
 class ClientClass(AbstractCryptoExchangeClient):
-    client = None
+    client: Client = None
 
     config = Config()
     config.init()
@@ -145,13 +146,14 @@ class ClientClass(AbstractCryptoExchangeClient):
 
         return list_of_trades
 
-    def get_savings_interests(self, from_timestamp, to_timestamp, list_of_assets) -> List[InterestData]:
+    def get_savings_interests(self, from_timestamp, to_timestamp) -> List[InterestData]:
         self.log.debug("Get interest from " + human_readable_interval_ts(from_timestamp, to_timestamp))
 
         result = []
-        lending_interest_history_daily = self.client.get_lending_interest_history(lendingType="DAILY", startTime=from_timestamp, endTime=to_timestamp, size=100)
 
+        lending_interest_history_daily = self.client.get_lending_interest_history(lendingType="DAILY", startTime=from_timestamp, endTime=to_timestamp, size=100)
         result.extend(get_interests_from_data(lending_interest_history_daily, SavingsType.LENDING, InterestDue.DAILY))
+
         lending_interest_history_activity = self.client.get_lending_interest_history(lendingType="ACTIVITY", startTime=from_timestamp, endTime=to_timestamp, size=100)
         result.extend(get_interests_from_data(lending_interest_history_activity, SavingsType.LENDING, InterestDue.ACTIVE))
 
@@ -160,7 +162,7 @@ class ClientClass(AbstractCryptoExchangeClient):
 
         return result
 
-    def get_withdrawals(self, from_timestamp: int, to_timestamp: int, list_of_assets: List[str]) -> List[WithdrawalData]:
+    def get_withdrawals(self, from_timestamp: int, to_timestamp: int) -> List[WithdrawalData]:
         self.log.debug("Get withdrawals from " + human_readable_interval_ts(from_timestamp, to_timestamp))
 
         all_withdrawal_history = []
@@ -185,7 +187,7 @@ class ClientClass(AbstractCryptoExchangeClient):
             ) for binance_withdrawal in all_withdrawal_history
         ]
 
-    def get_deposits(self, from_timestamp: int, to_timestamp: int, list_of_assets: List[str]) -> List[DepositData]:
+    def get_deposits(self, from_timestamp: int, to_timestamp: int) -> List[DepositData]:
         self.log.debug("Get deposits from " + human_readable_interval_ts(from_timestamp, to_timestamp))
 
         all_deposit_history = []
@@ -211,21 +213,21 @@ class ClientClass(AbstractCryptoExchangeClient):
     def connect(self):
         try:
             self.log.debug('Trying to connect to your account...')
-            new_client = Client(self.config.api_key, self.config.api_secret)
-            self.log.debug(new_client.get_account_status())
-            if new_client.get_account_status().get('data') != 'Normal':
-                raise Exception("Binance: Cannot access your account status.")
-            self.log.debug('Connection to your account established.')
-            self.client = new_client
+            self.client = Client(self.config.api_key, self.config.api_secret)
+            self.log.debug(self.client.get_account_status())
+
+            if self.client.get_account_status().get('data') != 'Normal':
+                self.log.error('Cannot access your account status.')
+                sys.exit(1)
+
+            self.log.debug('Account connected.')
         except BinanceAPIException as be:
             if be.code == 1 and be.status_code == 503 and be.message == "System is under maintenance.":
+                self.log.error('Binance is under maintenance.', be)
                 raise ExchangeUnderMaintenanceException()
-            else:
-                self.log.error('Cannot connect to your account.', be)
-                raise Exception('Cannot connect to your account.', be)
-        except Exception as e:
-            self.log.error('Cannot connect to your account.', e)
-            raise Exception('Cannot connect to your account.', e)
+
+            self.log.error('Cannot connect to your account.', be)
+            sys.exit(1)
 
     @staticmethod
     def get_trading_pair_message_log(list_of_trading_pairs):

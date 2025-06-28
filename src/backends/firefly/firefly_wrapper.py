@@ -1,5 +1,4 @@
 from __future__ import print_function
-from pprint import pprint
 
 import datetime
 import hashlib
@@ -9,7 +8,8 @@ import firefly_iii_client
 import urllib3
 from firefly_iii_client import ApiException
 
-import config as config
+import config
+
 from model.savings import InterestDue
 from model.transaction import TransactionType
 from model.withdrawal_deposit import WithdrawalData, DepositData

@@ -37,17 +37,16 @@ class SyncTimer(object):
             self.log.error("SYNC: The last sync did not finish successful: " + str(self.last_sync_result))
             exit(-700)
 
-        config_sync_interval = config.sync_inverval
-        self.sync_interval(self.last_sync_interval_begin_timestamp, config_sync_interval)
+        self.sync_interval(self.last_sync_interval_begin_timestamp, config.sync_inverval)
 
     def sync_interval(self, begin_timestamp_in_millis, interval):
-        current_datetime = datetime.datetime.now()
+        now = datetime.datetime.now()
 
         self.log.debug("Now: " + str(datetime.datetime.now()))
         self.log.debug("Last Interval Begin: " + str(datetime.datetime.fromtimestamp(begin_timestamp_in_millis / 1000)))
 
         previous_last_sync_interval_begin_timestamp = self.last_sync_interval_begin_timestamp
-        new_to_timestamp_in_millis = self.get_last_interval_begin_millis(config.sync_inverval, current_datetime)
+        new_to_timestamp_in_millis = self.get_last_interval_begin_millis(config.sync_inverval, now)
 
         try:
             self.last_sync_result = self.sync_logic.interval_processor(previous_last_sync_interval_begin_timestamp, new_to_timestamp_in_millis, False)
@@ -72,8 +71,8 @@ class SyncTimer(object):
             exit(-749)
 
     def import_all_from_exchange(self):
-        current_datetime = datetime.datetime.now()
-        to_timestamp = self.get_last_interval_begin_millis(config.sync_inverval, current_datetime)
+        now = datetime.datetime.now()
+        to_timestamp = self.get_last_interval_begin_millis(config.sync_inverval, now)
         begin_timestamp = int(datetime.datetime.fromisoformat(config.sync_begin_timestamp).timestamp() * 1000)
         self.sync_logic.interval_processor(begin_timestamp, to_timestamp, True)
 

@@ -139,6 +139,30 @@ For major changes, please open an issue first to discuss your proposal.
 
 ---
 
+## Code Linting
+
+This project uses [pylint](https://pylint.org/) for linting Python code.
+
+To check the code for linting issues, run:
+
+```bash
+pylint src
+```
+
+You can also save the report to a file:
+
+```bash
+pylint src > pylint_report.txt
+```
+
+To install pylint, run:
+
+```bash
+pip install pylint
+```
+
+---
+
 ## Disclaimer ⚠️
 
 This app requires access tokens for your Firefly III instance and API keys for your crypto trading platform account. Only grant the minimum permissions needed (read-only is sufficient for exchanges). Use at your own risk.

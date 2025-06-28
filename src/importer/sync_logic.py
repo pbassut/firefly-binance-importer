@@ -9,6 +9,12 @@ from backends.public_ledgers import available_explorer
 import logging
 from datetime import datetime
 from utils import from_ms
+from enum import Enum
+
+class IntervalEnum(Enum):
+    HOURLY = "hourly"
+    DAILY = "daily"
+    DEBUG = "debug"
 
 class SyncLogic:
     def __init__(self, trading_platform):
@@ -59,21 +65,22 @@ class SyncLogic:
                 self.augment_transaction_collection_with_firefly_accounts(transaction_collection, firefly_account_collection)
 
 
-    def handle_deposits(self, from_timestamp, to_timestamp, init, exchange_interface,
-                        firefly_account_collections, epochs_to_calculate):
-        from_date = datetime.fromtimestamp(from_timestamp / 1000)
-        to_date = datetime.fromtimestamp(to_timestamp / 1000)
-        if init:
-            self.log.debug("Importing all historical deposits from " + str(from_date) + " to " + str(to_date))
-        else:
-            self.log.debug("Importing deposits from " + str(from_date) + " to " + str(to_date) + ", " + str(epochs_to_calculate) + " intervals.")
+    def log_initial_message(self, from_timestamp, to_timestamp, init, component):
+        from_date = datetime.fromtimestamp(from_ms(from_timestamp))
+        to_date = datetime.fromtimestamp(from_ms(to_timestamp))
+        message = "Importing " + ("all historical " if init else "") + component + " from " + str(from_date) + " to " + str(to_date)
+        if not init:
+            epochs_to_calculate = self.get_epochs_differences(from_timestamp, to_timestamp, config.sync_inverval)
+            message += ", " + str(epochs_to_calculate) + " intervals."
 
+        self.log.debug(message)
+
+    def handle_deposits(self, from_timestamp, to_timestamp, init, exchange_interface,
+                        firefly_account_collections):
+        self.log_initial_message(from_timestamp, to_timestamp, init, "deposits")
 
         self.log.debug("1. Get deposits from exchange")
-        list_of_assets = []
-        for account_collection in firefly_account_collections:
-            list_of_assets.append(account_collection.security)
-        deposits = exchange_interface.get_deposits(from_timestamp, to_timestamp, list_of_assets)
+        deposits = exchange_interface.get_deposits(from_timestamp, to_timestamp)
         self.log.debug(list(map(lambda x: x.amount, deposits)))
 
         if len(deposits) == 0:
@@ -85,42 +92,26 @@ class SyncLogic:
 
 
     def handle_withdrawals(self, from_timestamp, to_timestamp, init, exchange_interface,
-                        firefly_account_collections, epochs_to_calculate):
-        from_date = datetime.fromtimestamp(from_timestamp / 1000)
-        to_date = datetime.fromtimestamp(to_timestamp / 1000)
-        if init:
-            self.log.debug("Importing all historical withdrawals from " + str(from_date) + " to " + str(to_date))
-        else:
-            self.log.debug("Importing withdrawals from " + str(from_date) + " to " + str(to_date) + ", " + str(epochs_to_calculate) + " intervals.")
+                        firefly_account_collections):
+        self.log_initial_message(from_timestamp, to_timestamp, init, "withdrawals")
 
         self.log.debug("1. Get received withdrawals from exchange")
-        list_of_assets = []
-        for account_collection in firefly_account_collections:
-            list_of_assets.append(account_collection.security)
-        withdrawals = exchange_interface.get_withdrawals(from_timestamp, to_timestamp, list_of_assets)
+        withdrawals = exchange_interface.get_withdrawals(from_timestamp, to_timestamp)
 
         if len(withdrawals) == 0:
             self.log.debug("No new withdrawals found.")
             return
 
         self.log.debug("2. Import withdrawals to Firefly III")
-        self
+        self.firefly.import_withdrawals(withdrawals, firefly_account_collections)
 
 
     def handle_interests(self, from_timestamp, to_timestamp, init, exchange_interface,
-                        firefly_account_collections, epochs_to_calculate):
-        from_date = datetime.fromtimestamp(from_timestamp / 1000)
-        to_date = datetime.fromtimestamp(to_timestamp / 1000)
-        if init:
-            self.log.debug("Importing all historical interests from " + str(from_date) + " to " + str(to_date))
-        else:
-            self.log.debug("Importing interests from " + str(from_date) + " to " + str(to_date) + ", " + str(epochs_to_calculate) + " intervals.")
+                        firefly_account_collections):
+        self.log_initial_message(from_timestamp, to_timestamp, init, "interests")
 
         self.log.debug("1. Get received interest from savings from exchange")
-        list_of_assets = []
-        for account_collection in firefly_account_collections:
-            list_of_assets.append(account_collection.security)
-        received_interests = exchange_interface.get_savings_interests(from_timestamp, to_timestamp, list_of_assets)
+        received_interests = exchange_interface.get_savings_interests(from_timestamp, to_timestamp)
 
         if len(received_interests) == 0:
             self.log.debug("No new interest received.")
@@ -131,13 +122,7 @@ class SyncLogic:
 
 
     def handle_trades(self, from_timestamp, to_timestamp, init, exchange_interface):
-        epochs_to_calculate = self.get_epochs_differences(from_timestamp, to_timestamp, config.sync_inverval)
-        from_date = datetime.fromtimestamp(from_ms(from_timestamp))
-        to_date = datetime.fromtimestamp(from_ms(to_timestamp))
-        if init:
-            self.log.debug("Importing all historical trades from " + str(from_date) + " to " + str(to_date))
-        else:
-            self.log.debug("Importing trades from " + str(from_date) + " to " + str(to_date) + ", " + str(epochs_to_calculate) + " intervals.")
+        self.log_initial_message(from_timestamp, to_timestamp, init, "trades")
 
         self.log.debug("1. Get eligible symbols from existing asset accounts within Firefly III")
         self.log.debug('symbols: ' + str(self.firefly.get_symbols_and_codes()))
@@ -147,7 +132,7 @@ class SyncLogic:
         self.log.debug("2. Get trades from crypto currency exchange")
         list_of_trade_data = exchange_interface.get_trades(from_timestamp, to_timestamp, list_of_trading_pairs)
         firefly_account_collections = self.firefly.get_firefly_account_collections_for_pairs(list_of_trading_pairs)
-        self.log.debug(firefly_account_collections)
+
         if len(list_of_trade_data) == 0:
             self.log.debug("No trades to import.")
             are_transactions_to_import = False
@@ -165,7 +150,7 @@ class SyncLogic:
 
             self.log.debug("6. Finish import and going to sleep")
 
-        return firefly_account_collections, epochs_to_calculate
+        return firefly_account_collections
 
 
     def get_x_pub_of_account(self, account, expression):
@@ -185,6 +170,7 @@ class SyncLogic:
                 if inner_transaction.currency_code == client.get_currency_code() or inner_transaction.currency_symbol == client.get_currency_code():
                     ledger_transaction = client.get_transaction_from_ledger(inner_transaction.external_id)
                     result.setdefault(inner_transaction.external_id, {"firefly": firefly_transaction, "ledger": ledger_transaction, "code": client.get_currency_code()})
+
         return result
 
 
@@ -193,7 +179,6 @@ class SyncLogic:
         supported_blockchains = {}
         for explorer_module in available_explorer:
             supported_blockchains.setdefault(explorer_module.get_blockchain_name(), explorer_module.get_blockchain_explorer())
-        self.log.debug("Supported blockchains: " + str(supported_blockchains))
         account_collections = [
             self.firefly.create_firefly_account_collection(security)
             for security in supported_blockchains.keys()
@@ -217,25 +202,23 @@ class SyncLogic:
         # 3. rewrite transactions in Firefly-III
         self.firefly.rewrite_unclassified_transactions(transactions, account_address_mapping) #, account_collections)
 
-
     def interval_processor(self, from_timestamp, to_timestamp, init):
         exchange_interface = exchange_interface_factory.get_specific_exchange_interface(self.trading_platform)
-        firefly_account_collections, epochs_to_calculate = self.handle_trades(from_timestamp, to_timestamp, init, exchange_interface)
-        # self.handle_interests(from_timestamp, to_timestamp, init, exchange_interface, firefly_account_collections, epochs_to_calculate)
-        self.handle_withdrawals(from_timestamp, to_timestamp, init, exchange_interface, firefly_account_collections, epochs_to_calculate)
-        self.handle_deposits(from_timestamp, to_timestamp, init, exchange_interface, firefly_account_collections, epochs_to_calculate)
+        firefly_account_collections = self.handle_trades(from_timestamp, to_timestamp, init, exchange_interface)
+        self.handle_interests(from_timestamp, to_timestamp, init, exchange_interface, firefly_account_collections)
+        self.handle_withdrawals(from_timestamp, to_timestamp, init, exchange_interface, firefly_account_collections)
+        self.handle_deposits(from_timestamp, to_timestamp, init, exchange_interface, firefly_account_collections)
         self.handle_unclassified_transactions()
 
         return "ok"
 
-
-    def get_epochs_differences(self, previous_last_begin_timestamp, last_begin_timestamp, sync_inverval):
-        if sync_inverval == 'hourly':
+    def get_epochs_differences(self, previous_last_begin_timestamp, last_begin_timestamp, interval: IntervalEnum):
+        if interval == IntervalEnum.HOURLY:
             return int(last_begin_timestamp / 1000 / 60 / 60) - int(previous_last_begin_timestamp / 1000 / 60 / 60)
-        elif sync_inverval == 'daily':
+        elif interval == IntervalEnum.DAILY:
             return int(last_begin_timestamp / 1000 / 60 / 60 / 24) - int(
                 previous_last_begin_timestamp / 1000 / 60 / 60 / 24)
-        elif sync_inverval == 'debug':
+        elif interval == IntervalEnum.DEBUG:
             return int(last_begin_timestamp / 1000 / 10) - int(previous_last_begin_timestamp / 1000 / 10)
         else:
             self.log.error("The configured interval is not supported. Use 'hourly' or 'daily' within your config.")
