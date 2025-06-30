@@ -366,17 +366,20 @@ class FireflyWrapper:
         return self.get_account_from_firefly(None, 'revenue', self.get_acc_revenue_key())
 
     def create_firefly_account_collection(self, security):
+        def raise_error(tag):
+            raise Exception(f'No account found with tag {tag} for security {security}. Create one before proceeding.')
+
         asset_account = self.get_asset_account_for_security(security)
         if asset_account is None:
-            raise Exception(f"No asset account found with tag {self.get_acc_fund_key()}. Create one before proceeding.")
+            raise_error(self.get_acc_fund_key())
 
         expense_account = self.get_expense_account_for_security(security)
         if expense_account is None:
-            raise Exception(f"No expense account found with tag {self.get_acc_expenses_key()}. Create one before proceeding.")
+            raise_error(self.get_acc_expenses_key())
 
         revenue_account = self.get_revenue_account_for_security(security)
         if revenue_account is None:
-            raise Exception(f"No revenue account found with tag {self.get_acc_revenue_key()}. Create one before proceeding.")
+            raise_error(self.get_acc_revenue_key())
 
         return AccountCollection(security, asset_account, expense_account, revenue_account)
 

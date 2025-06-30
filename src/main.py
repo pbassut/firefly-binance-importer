@@ -54,7 +54,9 @@ def worker(meta_class_instances):
         exchange.get('syncer').initial_sync()
 
     while True:
-        logger.info('Sleeping for %d seconds', interval_seconds)
+        next_sync_at = time.time() + interval_seconds
+        local_next_sync_at = time.localtime(next_sync_at)
+        logger.info('Sleeping. Next sync will happen at %s', time.strftime('%Y-%m-%d %H:%M:%S', local_next_sync_at))
         time.sleep(interval_seconds)
 
         for exchange in exchanges_list:

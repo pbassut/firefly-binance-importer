@@ -199,7 +199,7 @@ class SyncLogic:
         # self.handle_interests(from_timestamp, to_timestamp, init, exchange_interface, trades)
         self.handle_withdrawals(from_timestamp, to_timestamp, init, exchange_interface, trades)
         self.handle_deposits(from_timestamp, to_timestamp, init, exchange_interface, trades)
-        self.handle_unclassified_transactions()
+        # self.handle_unclassified_transactions()
 
         return "ok"
 
