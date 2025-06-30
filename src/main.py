@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 firefly = firefly_wrapper.FireflyWrapper("binance")
 
 def start():
-    migrate_firefly_identifiers.migrate_identifiers()
+    # migrate_firefly_identifiers.migrate_identifiers()
     try:
         impl_meta_class_instances = exchanges.get_impl_meta_class_instances()
         worker(impl_meta_class_instances)
@@ -28,11 +28,11 @@ def worker(meta_class_instances):
         exit(-12)
 
     interval_seconds = 0
-    if config.sync_inverval == IntervalEnum.HOURLY:
+    if config.sync_inverval == IntervalEnum.HOURLY.value:
         interval_seconds = 3600
-    elif config.sync_inverval == IntervalEnum.DAILY:
+    elif config.sync_inverval == IntervalEnum.DAILY.value:
         interval_seconds = 3600 * 24
-    elif config.sync_inverval == IntervalEnum.DEBUG:
+    elif config.sync_inverval == IntervalEnum.DEBUG.value:
         interval_seconds = 10
     else:
         logger.error("The configured interval is not supported. Use 'hourly' or 'daily' within your config.")
@@ -44,10 +44,14 @@ def worker(meta_class_instances):
 
     exchanges_list = []
     for cls in meta_class_instances:
+        if not cls.is_enabled():
+            continue
+
         exchange_name = cls.get_exchange_name()
         exchanges_list.append({ 'name': exchange_name, 'syncer': SyncTimer(exchange_name) })
 
-    map(lambda exchange: exchange.get('syncer').initial_sync(), exchanges_list)
+    for exchange in exchanges_list:
+        exchange.get('syncer').initial_sync()
 
     while True:
         logger.info('Sleeping for %d seconds', interval_seconds)

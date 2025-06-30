@@ -40,7 +40,9 @@ def get_firefly_accounts():
             for account_read in list_of_all_accounts.data:
                 list_of_accounts.append(account_read)
         except Exception as e:
-            print("Migration: Cannot get Firefly-III accounts." % e)
+            print("Migration: Cannot get Firefly-III accounts.", e)
+            raise e
+
         return list_of_accounts
 
 

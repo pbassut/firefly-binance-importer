@@ -19,15 +19,11 @@ class IntervalEnum(Enum):
 class SyncLogic:
     def __init__(self, trading_platform):
         self.trading_platform = trading_platform
-        self.log = logging.getLogger("[" + trading_platform + "] [SYNC_LOGIC]")
+        self.log = logging.getLogger("[" + trading_platform.upper() + "] [SYNC_LOGIC]")
         self.firefly = firefly_wrapper.FireflyWrapper(trading_platform)
 
     def get_transaction_collections_from_trade_data(self, list_of_trades: List[TradeData]):
-        result = []
-        for trade in list_of_trades:
-            result.append(TransactionCollection(trade, None, None, None, None))
-        return result
-
+        return list(map(lambda trade: TransactionCollection(trade, None, None, None, None), list_of_trades))
 
     def augment_transaction_collection_with_firefly_accounts(self, transaction_collection, firefly_account_collection):
         if transaction_collection.trade_data.type is TransactionType.BUY:
@@ -49,21 +45,9 @@ class SyncLogic:
         if firefly_account_collection.security == commission_asset:
             transaction_collection.commission_account = firefly_account_collection.expense_account.attributes
 
-        # self.log.debug('Trade data type: ' + str(transaction_collection.trade_data.type))
-        # self.log.debug('Commission asset: ' + commission_asset)
-        # self.log.debug('Firefly account symbol: ' + str(firefly_account_collection.asset_account.attributes.currency_symbol))
-        # self.log.debug('Firefly account code: ' + str(firefly_account_collection.asset_account.attributes.currency_code))
-        # self.log.debug('Commission asset found: ' + str(firefly_account_collection.asset_account.attributes))
         if commission_asset in firefly_account_collection.asset_account.attributes.currency_symbol \
                 or commission_asset in firefly_account_collection.asset_account.attributes.currency_code:
             transaction_collection.from_commission_account = firefly_account_collection.asset_account.attributes
-
-
-    def augment_transaction_collections_with_firefly_accounts(self, transaction_collections, firefly_account_collections):
-        for transaction_collection in transaction_collections:
-            for firefly_account_collection in firefly_account_collections:
-                self.augment_transaction_collection_with_firefly_accounts(transaction_collection, firefly_account_collection)
-
 
     def log_initial_message(self, from_timestamp, to_timestamp, init, component):
         from_date = datetime.fromtimestamp(from_ms(from_timestamp))
@@ -81,7 +65,7 @@ class SyncLogic:
 
         self.log.debug("1. Get deposits from exchange")
         deposits = exchange_interface.get_deposits(from_timestamp, to_timestamp)
-        self.log.debug(list(map(lambda x: x.amount, deposits)))
+        self.log.debug(deposits)
 
         if len(deposits) == 0:
             self.log.debug("No new deposits found.")
@@ -142,7 +126,14 @@ class SyncLogic:
         if are_transactions_to_import:
             self.log.debug("4. Map transactions to Firefly III accounts and prepare import")
             new_transaction_collections = self.get_transaction_collections_from_trade_data(list_of_trade_data)
-            self.augment_transaction_collections_with_firefly_accounts(new_transaction_collections, firefly_account_collections)
+
+            for transaction_collection in new_transaction_collections:
+                for firefly_account_collection in firefly_account_collections:
+                    self.augment_transaction_collection_with_firefly_accounts(transaction_collection, firefly_account_collection)
+
+                if transaction_collection.from_commission_account is None:
+                    raise Exception(f"No commission account found for asset {transaction_collection.trade_data.commission_asset}.")
+
             self.log.debug("5. Import new trades as transactions to Firefly III")
 
             for transaction_collection in new_transaction_collections:
@@ -204,10 +195,10 @@ class SyncLogic:
 
     def interval_processor(self, from_timestamp, to_timestamp, init):
         exchange_interface = exchange_interface_factory.get_specific_exchange_interface(self.trading_platform)
-        firefly_account_collections = self.handle_trades(from_timestamp, to_timestamp, init, exchange_interface)
-        self.handle_interests(from_timestamp, to_timestamp, init, exchange_interface, firefly_account_collections)
-        self.handle_withdrawals(from_timestamp, to_timestamp, init, exchange_interface, firefly_account_collections)
-        self.handle_deposits(from_timestamp, to_timestamp, init, exchange_interface, firefly_account_collections)
+        trades = self.handle_trades(from_timestamp, to_timestamp, init, exchange_interface)
+        # self.handle_interests(from_timestamp, to_timestamp, init, exchange_interface, trades)
+        self.handle_withdrawals(from_timestamp, to_timestamp, init, exchange_interface, trades)
+        self.handle_deposits(from_timestamp, to_timestamp, init, exchange_interface, trades)
         self.handle_unclassified_transactions()
 
         return "ok"
